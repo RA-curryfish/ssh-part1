@@ -298,7 +298,7 @@ int extract_public_key( char *buffer, unsigned int size, EVP_PKEY **pubkey )
 
 int generate_pseudorandom_bytes( unsigned char *buffer, unsigned int size)
 {
-	return 0;
+	return RAND_priv_bytes(buffer,size)==1?0:-1;
 }
 
 
