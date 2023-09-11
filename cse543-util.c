@@ -160,3 +160,22 @@ unsigned int buffer_from_file(char *filepath, unsigned char **buf)
 }
 
 
+/**********************************************************************
+
+    Function    : get_len_text
+    Description : gets length and the next len characters
+    Inputs      : buffer - the string from which to pick from
+				  pos - position to start from
+				  len - the lenght of the characters
+                  data - char array to store the characters
+    Outputs     : the index the characters end at 
+
+***********************************************************************/
+
+unsigned int get_len_text(char *buffer, unsigned int pos,unsigned int *len,unsigned char **data)
+{
+	*len = atoi(buffer+pos);
+	strncpy(*data,buffer+pos+1,*len);
+	
+	return (*len)+pos+1;
+}

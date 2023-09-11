@@ -172,21 +172,31 @@ int send_message( int sock, ProtoMessageHdr *hdr, char *block )
 int encrypt_message( unsigned char *plaintext, unsigned int plaintext_len, unsigned char *key, 
 		     unsigned char *buffer, unsigned int *len )
 {
+	unsigned char *ciphertext, *tag;
+	ciphertext=(unsigned char *)malloc(plaintext_len);memset(ciphertext,'\0',plaintext_len);
+	tag=(unsigned char *)malloc(TAGSIZE);memset(tag,'\0',TAGSIZE);
+	int clen=0;
+	unsigned char *iv;
+	if(generate_pseudorandom_bytes(iv,16)==-1) return -1;
+	unsigned char tempbuff[MAX_BLOCK_SIZE];memset(tempbuff,'\0',strlen(MAX_BLOCK_SIZE));
+
 	/*
 	* Given plaintext, its length plaintext_len and key
 	* Encrypt it using the key and copy the resulting encrypted data into buffer
 	*/
-
+	clen=encrypt(plaintext,plaintext_len,(unsigned char *)NULL,0,key,iv,ciphertext,tag);
+	if(!((clen>0) && (clen<=plaintext_len))) return -1;
 	/*
 	* Encrypted Buffer :- a Tag + an IV + Cipher Text
 	*/
-
+	strcat(tempbuff,iv);
+	strcat(tempbuff,tag);
+	strcat(tempbuff,ciphertext);
+	strcpy(buffer,tempbuff);
 	/*
 	* Take inspiration from Test AES function - We are trying to employ Symmetric Key Cryptography here
 	*/
-
-
-
+	return 0;
 }
 
 
@@ -207,17 +217,23 @@ int encrypt_message( unsigned char *plaintext, unsigned int plaintext_len, unsig
 int decrypt_message( unsigned char *buffer, unsigned int len, unsigned char *key, 
 		     unsigned char *plaintext, unsigned int *plaintext_len )
 {
+	int clen=0;
+	unsigned char iv[16], tag[TAGSIZE], ciphertext[BLOCKSIZE];
+	memset(iv,'\0',16);memset(tag,'\0',TAGSIZE);memset(ciphertext,'\0',BLOCKSIZE);
+	strncpy(iv,buffer,16);
+	strncpy(tag,buffer+16,TAGSIZE);
+	strcpy(ciphertext,buffer+16+TAGSIZE);
+	clen=strlen(ciphertext);
 	/*
 	* Given buffer, its length len and key
 	* Decrypt it using the key and copy the resulting data into plaintext, its length into plaintext_len
 	*/
-
+	*plaintext_len=decrypt(ciphertext,clen,(unsigned char *)NULL,0,tag,key,iv,plaintext);
+	if(*plaintext_len<0) return -1;
 	/*
 	* Take inspiration from Test AES function - We are trying to employ Symmetric Key Cryptography here
 	*/
-
-
-
+	return 0;
 }
 
 
@@ -300,22 +316,33 @@ int generate_pseudorandom_bytes( unsigned char *buffer, unsigned int size)
 /*** YOUR CODE ***/
 int seal_symmetric_key( unsigned char *key, unsigned int keylen, EVP_PKEY *pubkey, char *buffer )
 {
+	unsigned int len=0;
+	unsigned char *encryptedkey;
+	unsigned char *ek;
+	unsigned int ekl;
+	unsigned char *iv;
+	unsigned int ivl;
+	unsigned char tempbuffer[MAX_BLOCK_SIZE];memset(tempbuffer,'\0',strlen(tempbuffer));
+	unsigned char lenbuffer[MAX_BLOCK_SIZE];memset(lenbuffer,'\0',strlen(lenbuffer));
 	/*
 	* Given symmetric key "key", its length keylen and a known public key "pubkey"
 	* Encrypt the key using the RSA pubkey and copy the resulting encrypted data into buffer
 	*/
-
+	len=rsa_encrypt(key,keylen,&encryptedkey,&ek,&ekl,&iv,&ivl,pubkey);
+	if(len<0) return -1;
 	/*
 	* The Encrypted Buffer needs the following - Encrypted RSA pubkey, its length, an IV, its length, Ciphertext of Symmetric Key, its length
 	* One Such implementation is :- encypted rsa pubkey length + iv length + ciphertext length + encrypted rsa pubkey + IV + Ciphertext
 	*/
-
+	sprintf(lenbuffer,"%d",ekl);strcat(tempbuffer,lenbuffer);strcat(tempbuffer,ek);
+	sprintf(lenbuffer,"%d",ivl);strcat(tempbuffer,lenbuffer);strcat(tempbuffer,iv);
+	sprintf(lenbuffer,"%d",len);strcat(tempbuffer,lenbuffer);strcat(tempbuffer,encryptedkey);
+	buffer=(char*)malloc(strlen(tempbuffer));
+	strcpy(buffer,tempbuffer);
 	/*
 	* Take inspiration from Test RSA function - We are trying to employ Asymmetric Key Cryptography here
 	*/
-
-
-
+	return len;
 }
 
 /**********************************************************************
@@ -332,21 +359,30 @@ int seal_symmetric_key( unsigned char *key, unsigned int keylen, EVP_PKEY *pubke
 /*** YOUR CODE ***/
 int unseal_symmetric_key( char *buffer, unsigned int len, EVP_PKEY *privkey, unsigned char **key )
 {
+	int declen=0;
+	unsigned char ek[MAX_BLOCK_SIZE];memset(ek,'\0',strlen(ek));
+	unsigned int ekl; 
+	unsigned char iv[MAX_BLOCK_SIZE];memset(iv,'\0',strlen(iv));
+	unsigned int ivl;
+	unsigned int ciphertextl;
+	unsigned char ciphertext[MAX_BLOCK_SIZE];memset(ciphertext,'\0',strlen(ciphertext));
+
 	/*
 	* Given buffer, its length len and a known private key "privkey"
 	* Decrypt it using the private key and copy the resulting data into key
 	*/
-
+	int pos = get_len_text(buffer,0,&ekl,&ek);
+	pos = get_len_text(buffer,pos,&ivl,&iv);
+	pos = get_len_text(buffer,pos,&ciphertextl,&ciphertext);
 	/*
 	* Remember : The buffer could be something like this ("encypted rsa pubkey length + iv length + ciphertext length + encrypted rsa pubkey + IV + Ciphertext")
 	*/
-
+	declen = rsa_decrypt(ciphertext,ciphertextl,ek,ekl,iv,ivl,&key,privkey);
+	if(declen<0) return -1;
 	/*
 	* Take inspiration from Test RSA function - We are trying to employ Asymmetric Key Cryptography here
 	*/
-
-
-
+	return 0;
 }
 
 
@@ -370,29 +406,48 @@ int unseal_symmetric_key( char *buffer, unsigned int len, EVP_PKEY *privkey, uns
 /*** YOUR CODE ***/
 int client_authenticate( int sock, unsigned char **session_key )
 {
+	ProtoMessageHdr initClientRequest,initServerResponse,initClientAck,initServerAck;
+	initClientRequest.msgtype=CLIENT_INIT_EXCHANGE;initClientRequest.length=0;
+	initServerResponse.msgtype=SERVER_INIT_RESPONSE;initServerResponse.length=0;
+	initClientAck.msgtype=CLIENT_INIT_ACK;initClientAck.length=0;
+	initServerAck.msgtype=SERVER_INIT_ACK;initServerAck.length=0;
+	unsigned char *pubkeybuffer=malloc(MAX_BLOCK_SIZE);
+	unsigned char *symkey=(unsigned char *)malloc(KEYSIZE);
+	unsigned char *buffer=(unsigned char *)malloc(MAX_BLOCK_SIZE);
+	unsigned int encrsymmkeyl=0;
+	EVP_PKEY *pubkey;
 	/*
 	* Send Message to server with header CLIENT_INIT_EXCHANGE
 	*/
-
+	send_message(sock,&initClientRequest,NULL);
 	/*
 	* Wait for Message from server with header SERVER_INIT_RESPONSE
 	* Extract Pub Key out of the message -> Create a new Symmetric Key -> Encrypt it using the Pub Key of server
 	*/
-
+	printf("wait for server init response\n");
+	wait_message(sock,&initServerResponse,pubkeybuffer,SERVER_INIT_RESPONSE);
+	if(extract_public_key(pubkeybuffer,initServerResponse.length,&pubkey)<0) return -1;
+	if(generate_pseudorandom_bytes(symkey,KEYSIZE)<0) return -1;
+	encrsymmkeyl=seal_symmetric_key(symkey,KEYSIZE,pubkey,buffer);
+	if(encrsymmkeyl<0) return -1;
 	/*
 	* Send message to server with header CLIENT_INIT_ACK
 	* The encrypted symmetric key from previous phase should be sent here
 	*/
-
+	initClientAck.length=encrsymmkeyl;
+	send_message(sock,&initClientAck,buffer);
 	/*
 	* Wait message from server with header SERVER_INIT_ACK
 	* Decrypt the message using the symmetric key and make sure the code doesn't break. 
 	* This would mean both Client and Server have the same symmetric key now and the SSH connection is successful
 	*/
-
+	printf("wait for server init ack");
+	buffer[0]='\0';
+	wait_message(sock,&initServerAck,buffer,SERVER_INIT_ACK);
 	/*
 	* Store the Symmetric key in session_key for later use. 
 	*/
+	strcpy(*session_key,symkey);
 }
 
 /**********************************************************************
