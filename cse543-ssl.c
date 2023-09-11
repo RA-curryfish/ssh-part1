@@ -159,24 +159,24 @@ void digest_message(const unsigned char *message, size_t message_len, unsigned c
 
 int hmac_message(unsigned char* msg, size_t mlen, unsigned char** val, size_t* vlen, unsigned char *key)
 {
-	HMAC_CTX ctx;
+	HMAC_CTX *ctx;
 	const EVP_MD* md = NULL;
 
 	OpenSSL_add_all_digests();
 
 	md = EVP_get_digestbyname("SHA256");
-	HMAC_CTX_init( &ctx );
+	HMAC_CTX_init( ctx );
 
-	if(!HMAC_Init_ex(&ctx, key, sizeof(key), md, NULL))
+	if(!HMAC_Init_ex(ctx, key, sizeof(key), md, NULL))
 		handleErrors();
 
-	if(!HMAC_Update(&ctx, msg, mlen))
+	if(!HMAC_Update(ctx, msg, mlen))
 		handleErrors();
 
-	if(!HMAC_Final(&ctx, *val, (unsigned int *)vlen))
+	if(!HMAC_Final(ctx, *val, (unsigned int *)vlen))
 		handleErrors();
   
-	HMAC_CTX_cleanup(&ctx);
+	HMAC_CTX_cleanup(ctx);
 
 #if 0
 	unsigned int i;
