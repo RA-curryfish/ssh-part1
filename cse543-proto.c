@@ -173,12 +173,12 @@ int encrypt_message( unsigned char *plaintext, unsigned int plaintext_len, unsig
 		     unsigned char *buffer, unsigned int *len )
 {
 	unsigned char *ciphertext, *tag;
-	ciphertext=(unsigned char *)malloc(plaintext_len);memset(ciphertext,'\0',plaintext_len);
-	tag=(unsigned char *)malloc(TAGSIZE);memset(tag,'\0',TAGSIZE);
+	ciphertext=(unsigned char *)malloc(plaintext_len);memset(ciphertext,'\0',(size_t)plaintext_len);
+	tag=(unsigned char *)malloc((size_t)TAGSIZE);memset(tag,'\0',(size_t)TAGSIZE);
 	int clen=0;
-	unsigned char *iv;
-	if(generate_pseudorandom_bytes(iv,16)==-1) return -1;
-	unsigned char tempbuff[MAX_BLOCK_SIZE];memset(tempbuff,'\0',strlen(MAX_BLOCK_SIZE));
+	unsigned char *iv=(unsigned char *)malloc((size_t)IVSIZE);
+	if(generate_pseudorandom_bytes(iv,IVSIZE)==-1) return -1;
+	unsigned char tempbuff[MAX_BLOCK_SIZE];memset(tempbuff,'\0',(size_t)MAX_BLOCK_SIZE);
 
 	/*
 	* Given plaintext, its length plaintext_len and key
@@ -218,11 +218,11 @@ int decrypt_message( unsigned char *buffer, unsigned int len, unsigned char *key
 		     unsigned char *plaintext, unsigned int *plaintext_len )
 {
 	int clen=0;
-	unsigned char iv[16], tag[TAGSIZE], ciphertext[BLOCKSIZE];
-	memset(iv,'\0',16);memset(tag,'\0',TAGSIZE);memset(ciphertext,'\0',BLOCKSIZE);
-	strncpy(iv,buffer,16);
-	strncpy(tag,buffer+16,TAGSIZE);
-	strcpy(ciphertext,buffer+16+TAGSIZE);
+	unsigned char iv[IVSIZE], tag[TAGSIZE], ciphertext[BLOCKSIZE];
+	memset(iv,'\0',(size_t)IVSIZE);memset(tag,'\0',(size_t)TAGSIZE);memset(ciphertext,'\0',(size_t)BLOCKSIZE);
+	strncpy(iv,buffer,IVSIZE);
+	strncpy(tag,buffer+IVSIZE,TAGSIZE);
+	strcpy(ciphertext,buffer+IVSIZE	+TAGSIZE);
 	clen=strlen(ciphertext);
 	/*
 	* Given buffer, its length len and key
@@ -322,8 +322,8 @@ int seal_symmetric_key( unsigned char *key, unsigned int keylen, EVP_PKEY *pubke
 	unsigned int ekl;
 	unsigned char *iv;
 	unsigned int ivl;
-	unsigned char tempbuffer[MAX_BLOCK_SIZE];memset(tempbuffer,'\0',strlen(tempbuffer));
-	unsigned char lenbuffer[MAX_BLOCK_SIZE];memset(lenbuffer,'\0',strlen(lenbuffer));
+	unsigned char *tempbuffer=(unsigned char *)malloc(MAX_BLOCK_SIZE);memset(tempbuffer,'\0',(size_t)MAX_BLOCK_SIZE);
+	unsigned char *lenbuffer=(unsigned char *)malloc(MAX_BLOCK_SIZE);memset(lenbuffer,'\0',(size_t)MAX_BLOCK_SIZE);
 	/*
 	* Given symmetric key "key", its length keylen and a known public key "pubkey"
 	* Encrypt the key using the RSA pubkey and copy the resulting encrypted data into buffer
@@ -360,12 +360,12 @@ int seal_symmetric_key( unsigned char *key, unsigned int keylen, EVP_PKEY *pubke
 int unseal_symmetric_key( char *buffer, unsigned int len, EVP_PKEY *privkey, unsigned char **key )
 {
 	int declen=0;
-	unsigned char ek[MAX_BLOCK_SIZE];memset(ek,'\0',strlen(ek));
+	unsigned char *ek=(unsigned char *)malloc(MAX_BLOCK_SIZE);memset(ek,'\0',(size_t)MAX_BLOCK_SIZE);
 	unsigned int ekl; 
-	unsigned char iv[MAX_BLOCK_SIZE];memset(iv,'\0',strlen(iv));
+	unsigned char *iv=(unsigned char *)malloc(IVSIZE);memset(iv,'\0',(size_t)IVSIZE);
 	unsigned int ivl;
 	unsigned int ciphertextl;
-	unsigned char ciphertext[MAX_BLOCK_SIZE];memset(ciphertext,'\0',strlen(ciphertext));
+	unsigned char ciphertext[MAX_BLOCK_SIZE];memset(ciphertext,'\0',(size_t)MAX_BLOCK_SIZE);
 
 	/*
 	* Given buffer, its length len and a known private key "privkey"
@@ -377,7 +377,7 @@ int unseal_symmetric_key( char *buffer, unsigned int len, EVP_PKEY *privkey, uns
 	/*
 	* Remember : The buffer could be something like this ("encypted rsa pubkey length + iv length + ciphertext length + encrypted rsa pubkey + IV + Ciphertext")
 	*/
-	declen = rsa_decrypt(ciphertext,ciphertextl,ek,ekl,iv,ivl,&key,privkey);
+	declen = rsa_decrypt(ciphertext,ciphertextl,ek,ekl,iv,ivl,key,privkey);
 	if(declen<0) return -1;
 	/*
 	* Take inspiration from Test RSA function - We are trying to employ Asymmetric Key Cryptography here
@@ -411,9 +411,9 @@ int client_authenticate( int sock, unsigned char **session_key )
 	initServerResponse.msgtype=SERVER_INIT_RESPONSE;initServerResponse.length=0;
 	initClientAck.msgtype=CLIENT_INIT_ACK;initClientAck.length=0;
 	initServerAck.msgtype=SERVER_INIT_ACK;initServerAck.length=0;
-	unsigned char *pubkeybuffer=malloc(MAX_BLOCK_SIZE);
+	char *pubkeybuffer=malloc(MAX_BLOCK_SIZE);
 	unsigned char *symkey=(unsigned char *)malloc(KEYSIZE);
-	unsigned char *buffer=(unsigned char *)malloc(MAX_BLOCK_SIZE);
+	char *buffer=(char *)malloc(MAX_BLOCK_SIZE);
 	unsigned int encrsymmkeyl=0;
 	EVP_PKEY *pubkey;
 	/*
@@ -448,6 +448,7 @@ int client_authenticate( int sock, unsigned char **session_key )
 	* Store the Symmetric key in session_key for later use. 
 	*/
 	strcpy(*session_key,symkey);
+	return initServerAck.length;
 }
 
 /**********************************************************************
