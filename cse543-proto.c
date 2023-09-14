@@ -154,6 +154,23 @@ int send_message( int sock, ProtoMessageHdr *hdr, char *block )
                   send_data(sock, block, real_len) );
 }
 
+
+/**********************************************************************
+
+    Function    : generate_pseudorandom_bytes
+    Description : Generate pseudirandom bytes using OpenSSL PRNG 
+    Inputs      : buffer - buffer to fill
+                  size - number of bytes to get
+    Outputs     : 0 if successful, -1 if failure
+
+***********************************************************************/
+
+int generate_pseudorandom_bytes( unsigned char *buffer, unsigned int size)
+{
+	return RAND_priv_bytes(buffer,size)==1?0:-1;
+}
+
+
 /**********************************************************************
 
     Function    : encrypt_message
@@ -283,22 +300,6 @@ int extract_public_key( char *buffer, unsigned int size, EVP_PKEY **pubkey )
 
 	fclose( fptr );
 	return 0;
-}
-
-
-/**********************************************************************
-
-    Function    : generate_pseudorandom_bytes
-    Description : Generate pseudirandom bytes using OpenSSL PRNG 
-    Inputs      : buffer - buffer to fill
-                  size - number of bytes to get
-    Outputs     : 0 if successful, -1 if failure
-
-***********************************************************************/
-
-int generate_pseudorandom_bytes( unsigned char *buffer, unsigned int size)
-{
-	return RAND_priv_bytes(buffer,size)==1?0:-1;
 }
 
 
