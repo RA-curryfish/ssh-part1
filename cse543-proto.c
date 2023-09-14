@@ -167,7 +167,7 @@ int send_message( int sock, ProtoMessageHdr *hdr, char *block )
 
 int generate_pseudorandom_bytes( unsigned char *buffer, unsigned int size)
 {
-	return RAND_priv_bytes(buffer,size)==1?0:-1;
+	return RAND_bytes(buffer,size)==1?0:-1;
 }
 
 
